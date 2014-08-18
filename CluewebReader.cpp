@@ -233,9 +233,9 @@ void  CluewebReader::loadRawListIn(RawIndexList& tList) {
 	compressed_list = new unsigned char[listLenBytes];
 	uncompressed_list = new unsigned int[listLen*2];
 
-	const char* InvertedIndex = "/data/constantinos/InvertedIndex";
-	FILE* F_InvertedIndex = fopen(InvertedIndex,"r");
-	if( F_InvertedIndex == NULL ) cout << "Problem! The file: " << InvertedIndex << " could not be opened!" << endl;
+	// const char* InvertedIndex = "/data/constantinos/InvertedIndex";
+	FILE* F_InvertedIndex = fopen(CONSTS::clueweb_index.c_str(),"r");
+	if( F_InvertedIndex == NULL ) cout << "Problem! The file: " << CONSTS::clueweb_index << " could not be opened!" << endl;
 	//  	  else cout << "Loading from file: " << InvertedIndex << endl;
 	 fseek(F_InvertedIndex, offset, SEEK_SET);
 	 fread(compressed_list, 1, listLenBytes, F_InvertedIndex);

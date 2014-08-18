@@ -47,6 +47,7 @@
 #include "pairalgo.h"
 #include "DepthCal.h"
 #include "Dopt.h"
+#include "algo_init.h"
 #include "CluewebReader.h"
 
 
@@ -123,7 +124,7 @@ void QueryProcessing::fillTermsMap_pairs(termsMap& lex){
    	 	  // printf ("%s\n", ent->d_name);
   		  string filename = string(ent->d_name);
   		  if((filename.compare(".")!=0)&&(filename.compare("..")!=0)){
-   	 	  		lex[filename] = 1000;
+   	 	  		lex[filename] = 1000; //pair depth
    	 	}
   		}
   		cout<<"pairlex size: "<<lex.size()<<endl;
@@ -342,7 +343,7 @@ public:
 };
 
 /* Query Processing */
-void QueryProcessing::operator()(const char* queryLog, const int buckets, const int limit, const int topk, const int layer)	{
+void QueryProcessing::operator()(CluewebReader* Reader, const char* queryLog, const int buckets, const int limit, const int topk, const int layer)	{
 	resultsDump resLogger;
 	profilerC& p = profilerC::getInstance();
 
@@ -410,6 +411,10 @@ void QueryProcessing::operator()(const char* queryLog, const int buckets, const 
 			word_l = (*queriesFIterator);
 		}
 
+		/*Control query size*/
+		// if(word_l.size()!=7)
+		// 	continue;
+
 		// ########################################################################################
 		// Initializing (opening) list (lps=list pointer) structures based on standard index
 		lptrArray lps = openLists(word_l, lex); // Standard Index
@@ -434,11 +439,13 @@ void QueryProcessing::operator()(const char* queryLog, const int buckets, const 
 		// ExhaustiveOR wand(pages);                  // Exhaustive OR
 
 		//Wand wand(pages);                    		 // WAND
-		Maxscore wand(pages);              	 	 // Maxscore
+		// Maxscore wand(pages);              	 	 // Maxscore
 		// DataAns wand(pages);                 // DataAns
 		// pairalgo wand(pages);                	//to generate single term binary files(debug purpose)
 		// DepthCal wand(pages);				//Cal Depth for pair and single terms
 		// Dopt wand(pages);				//Cal percentage for a setting
+		algo_init wand(pages);				//test the speed
+
 
 
 
@@ -577,20 +584,21 @@ void QueryProcessing::operator()(const char* queryLog, const int buckets, const 
 		QpResult res[topk]; 			// result set - comment line if PriorityArray is used to maintain the results
 		COUT << word_l << Log::endl; 	// print query (if verbose set to the right value)
 		// CluewebReader* Reader  = CluewebFactory(); //for new algo
-		p.start(CONSTS::ALLQS); 		// Start measuring qp time - NOTE: that OTF BMG is already measured if DocID-Oriented Block-Max structures are used (DOCIDBLOCKMAX is defined)
+		// p.start(CONSTS::ALLQS); 		// Start measuring qp time - NOTE: that OTF BMG is already measured if DocID-Oriented Block-Max structures are used (DOCIDBLOCKMAX is defined)
 
 		// various default parameters for running algorithms
 		// wand(lps, topk, res);   //or, pair
 		// wand(Reader, qn, pls, lps, topk, res);   //generate single term index
 		// wand(qn, pls, lps, topk, res);   //Cal Depth
 		// wand(qn, pls, lps, topk, res);   //Dopt
+		wand(Reader, qn, pls, lps, topk, res, p);   //algo_init
 		//wand(lps, topk, 0.0f);
-		wand(lps, topk, res, 0.0f);  //Maxscore
+		// wand(lps, topk, res, 0.0f);  //Maxscore
 		//wand(lps, topk, res, 0.0f, 0);
 		// wand(lps, qn);  //DataAns
 		//PriorityArray<QpResult> resultsHeap = wand(lps, topk);
 
-		p.end(CONSTS::ALLQS); 			// Stop measuring qp time - NOTE: that OTF BMG is already measured if DocID-Oriented Block-Max structures are used (DOCIDBLOCKMAX is defined)
+		// p.end(CONSTS::ALLQS); 			// Stop measuring qp time - NOTE: that OTF BMG is already measured if DocID-Oriented Block-Max structures are used (DOCIDBLOCKMAX is defined)
 		// delete Reader;	//for new algo
 		// ########################################################################################
 		// obtain result set after query processing and perform sanity check with ground truth
@@ -1365,7 +1373,10 @@ pairlists QueryProcessing::openPLists(const std::vector<std::string>& word_l, te
 	for(int i = 0; i<word_l.size(); i++){
 	  		for(int j = i+1; j< word_l.size(); j++){
 	  			// cout<<word_l.at(i)<<" "<<word_l.at(j)<<endl;
-	  			pair = word_l.at(i) + "+" + word_l.at(j);
+	  			if(word_l.at(i).compare(word_l.at(j))<0)
+				    pair = word_l.at(i) + "+" + word_l.at(j);
+				else
+	  			    pair = word_l.at(j) + "+" + word_l.at(i);
 	  			// cout<<"generated: "<<pair<<endl;
 
 	  			termsMap::iterator itr = lex.find(pair);

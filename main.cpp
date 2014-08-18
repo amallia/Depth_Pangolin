@@ -147,10 +147,13 @@ int main(int argc, char * argv[] ){
     				}else{ //if it's a depth
     					if(tvector.at(i-1).find('+')==string::npos){ //if it's not for a pair
     					kmap[tvector.at(i-1)].depth = atoi(tvector.at(i).c_str());
-    					//max(sqrt(kmap[tvector.at(i-1)].listlength),(double)100)
-    				    //pow(kmap[tvector.at(i-1)].listlength, 1.0/3)
-    					// pow(pow(kmap[tvector.at(i-1)].listlength, 1.0/3),2)
-    					if(kmap[tvector.at(i-1)].depth <= min(pow(pow(kmap[tvector.at(i-1)].listlength, 1.0/3), 2), (double)10000) && kmap[tvector.at(i-1)].depth != 0){  //single term threshold
+    
+    					// if(kmap[tvector.at(i-1)].depth <= min(pow(pow(kmap[tvector.at(i-1)].listlength, 1.0/3), 2), (double)10000) && kmap[tvector.at(i-1)].depth != 0){  //single term threshold
+    					// if(kmap[tvector.at(i-1)].depth <= kmap[tvector.at(i-1)].listlength && kmap[tvector.at(i-1)].depth != 0){
+    					// if(kmap[tvector.at(i-1)].depth <= (min(sqrt(kmap[tvector.at(i-1)].listlength),(double)10000) + 1) && kmap[tvector.at(i-1)].depth != 0){
+    					// if(kmap[tvector.at(i-1)].depth <= (min(kmap[tvector.at(i-1)].listlength,7087) + 1) && kmap[tvector.at(i-1)].depth != 0){
+    					// if(kmap[tvector.at(i-1)].depth <= (min(0.2*kmap[tvector.at(i-1)].listlength, (double)10000) + 1) && kmap[tvector.at(i-1)].depth != 0){
+    					if(kmap[tvector.at(i-1)].depth == -10){ //no singlelists
     						kmap[tvector.at(i-1)].kl = 1;
     					}
 
@@ -330,8 +333,10 @@ int main(int argc, char * argv[] ){
 
 	   QueryProcessing qp(Cache);
 	   topk = 500;
-	   qp(queryFile.c_str(), buckets, limit, topk, layer); //process the queries
+	   CluewebReader* Reader  = CluewebFactory();
+	   qp(Reader, queryFile.c_str(), buckets, limit, topk, layer); //process the queries
 	   qp.printReport();
 	   COUT1 << "start cleanup" << Log::endl;
+	   delete Reader;
 	   return 0;
 }

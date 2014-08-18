@@ -2,6 +2,7 @@
 #include "ListIterator.h"
 #include "PostingOriented_BMW.h"
 #include "TrecReader.h"
+#include "CluewebReader.h"
 #include <bitset>
 
 #ifdef CPP0X
@@ -67,7 +68,8 @@ public:
 	void fillTermsMap(termsMap& lex, const std::string&);
 	void fillTermsMap_pairs(termsMap& lex);
 	void fillTermsMap_clueweb(termsMap& lex, const std::string&);
-	void operator()(const char* queryLog, const int buckets, const int limit, const int topk, const int layer);
+	// void operator()(const char* queryLog, const int buckets, const int limit, const int topk, const int layer);
+	void operator()(CluewebReader* Reader, const char* queryLog, const int buckets, const int limit, const int topk, const int layer);
 	void printReport() const;
 
 	// newly added (auxiliary) functions
