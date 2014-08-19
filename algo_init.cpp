@@ -15,11 +15,13 @@
 #include <fstream>
 #include <algorithm>
 #include <string>
+#include <bitset>
 
 using namespace std;
 
 struct pinfo{
 	unsigned int did;
+	// float s;
 	float s1;
 	float s2;
 };
@@ -37,7 +39,6 @@ struct scores{
 	int f2;
 };
 
-
 bool myfunc (sinfo a, sinfo b){
 	return (a.score > b.score);
 }
@@ -53,12 +54,15 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
 	string queryline;
 
+	map<string, int> termmapping;
+
 	// map<string, vector<pinfo>> pairmap1;
 	// map<string, vector<pinfo>> pairmap2;
 	// map<string, vector<pinfo>> pairmap3;
 	// map<string, vector<pinfo>> pairmap4;
 	// map<string, vector<pinfo>> pairmap5;
 	map<string, vector<pinfo>> pairmap;
+	map<string, vector<short>> psizemap;
 
 	vector<pinfo> tempp_v1;
 	vector<pinfo> tempp_v2;
@@ -66,13 +70,15 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 	vector<pinfo> tempp_v4;
 	vector<pinfo> tempp_v5;
 	vector<pinfo> tempp_v;
-
+	vector<short> psize;
+ 
 	// map<string, vector<sinfo>> singlemap1;
 	// map<string, vector<sinfo>> singlemap2;
 	// map<string, vector<sinfo>> singlemap3;
 	// map<string, vector<sinfo>> singlemap4;
 	// map<string, vector<sinfo>> singlemap5;
 	map<string, vector<sinfo>> singlemap;
+	map<string, vector<short>> ssizemap;
 
 	vector<sinfo> temps_v1;
 	vector<sinfo> temps_v2;
@@ -80,6 +86,7 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 	vector<sinfo> temps_v4;
 	vector<sinfo> temps_v5;
 	vector<sinfo> temps_v;
+	vector<short> ssize;
 
 	// const int tablesize = 3079;
 	// int didtable[tablesize];
@@ -104,6 +111,8 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
   	float sc1;
   	string sc2_s;
   	float sc2;
+  	// string ts_s;
+  	// float ts;
 
   	if(pls.lengths.size()>0){
 
@@ -117,7 +126,7 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
   	count = 0;
 
-  	cout<<pls.pairnames.at(k)<<endl;
+  	// cout<<pls.pairnames.at(k)<<endl;
 
   	while(getline(pair_stream, queryline)){
 
@@ -134,12 +143,14 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 		did_s = string(start, itr);
 		did = atoi(did_s.c_str());
 
-		//ignore the total score
+		//take the total score
 		start = itr+1;
   	  	itr++;
     	while(itr != queryline.end() && !isspace(*itr)){
 			++itr;
 		}
+		// ts_s = string(start, itr);
+		// ts = atof(ts_s.c_str());
 
 		//ignore the first freq
 		start = itr+1;
@@ -177,6 +188,7 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
 
 		temp.did = did;
+		// temp.s = ts;
 		temp.s1 = sc1;
 		temp.s2 = sc2;
 
@@ -210,6 +222,11 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 	 	tempp_v.insert(tempp_v.end(),tempp_v3.begin(),tempp_v3.end());
 	 	tempp_v.insert(tempp_v.end(),tempp_v4.begin(),tempp_v4.end());
 	 	tempp_v.insert(tempp_v.end(),tempp_v5.begin(),tempp_v5.end());
+	 	psize.push_back(tempp_v1.size());
+	 	psize.push_back(tempp_v2.size());
+	 	psize.push_back(tempp_v3.size());
+	 	psize.push_back(tempp_v4.size());
+	 	psize.push_back(tempp_v5.size());
 
 
 	 	// for(int i = 0; i<tempp_v.size(); i++){
@@ -217,6 +234,9 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 	 	// }
 
 	 	pairmap[pls.pairnames.at(k)] = tempp_v;
+	 	psizemap[pls.pairnames.at(k)] = psize;
+	 	cout<<pls.pairnames.at(k)<<": "<<tempp_v.size()<<endl;
+	 	cout<<pls.pairnames.at(k)<<": "<<psize.size()<<endl;
 
 	 	tempp_v1.clear();
   		tempp_v2.clear();
@@ -224,53 +244,13 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
   		tempp_v4.clear();
   		tempp_v5.clear();
   		tempp_v.clear();
+  		psize.clear();
 
   	  	pair_stream.close();
 	}
 
 	}//if pair list size is not 0
 	/*-----------------------*/
-
-	// cout<<"map1 size: "<<pairmap1.size()<<endl;
-	// cout<<"map2 size: "<<pairmap2.size()<<endl;
-	// cout<<"map3 size: "<<pairmap3.size()<<endl;
-	// cout<<"map4 size: "<<pairmap4.size()<<endl;
-	// cout<<"map5 size: "<<pairmap5.size()<<endl;
-
-	// for(map<string, vector<pinfo>>::iterator it = pairmap1.begin(); it!=pairmap1.end(); ++it){
-	// 	cout<< it->first << ": " <<it->second.size()<<endl;
-	// 	for(int i=0; i<it->second.size(); i++){
-	// 		cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-	// 	}
-	// }
-
-	// for(map<string, vector<pinfo>>::iterator it = pairmap2.begin(); it!=pairmap2.end(); ++it){
-	// 	cout<< it->first << ": " <<it->second.size()<<endl;
-	// 	for(int i=0; i<it->second.size(); i++){
-	// 		cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-	// 	}
-	// }
-
-	// for(map<string, vector<pinfo>>::iterator it = pairmap3.begin(); it!=pairmap3.end(); ++it){
-	// 	cout<< it->first << ": " <<it->second.size()<<endl;
-	// 	for(int i=0; i<it->second.size(); i++){
-	// 		cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-	// 	}
-	// }
-
-	// for(map<string, vector<pinfo>>::iterator it = pairmap4.begin(); it!=pairmap4.end(); ++it){
-	// 	cout<< it->first << ": " <<it->second.size()<<endl;
-	// 	for(int i=0; i<it->second.size(); i++){
-	// 		cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-	// 	}
-	// }
-
-	// for(map<string, vector<pinfo>>::iterator it = pairmap5.begin(); it!=pairmap5.end(); ++it){
-	// 	cout<< it->first << ": " <<it->second.size()<<endl;
-	// 	for(int i=0; i<it->second.size(); i++){
-	// 		cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-	// 	}
-	// }
 
 
 	/*load the singlelist into map*/
@@ -298,6 +278,8 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
 	 	t_list.resize(1000);// resize according to Configuration file
 
+		termmapping[term] = 0; //for didmapping
+
 	 	// cout<<t_list.size()<<endl;
 
 	 	for(int j = 0; j < t_list.size(); j++){
@@ -320,6 +302,11 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 	 	temps_v.insert(temps_v.end(),temps_v3.begin(),temps_v3.end());
 	 	temps_v.insert(temps_v.end(),temps_v4.begin(),temps_v4.end());
 	 	temps_v.insert(temps_v.end(),temps_v5.begin(),temps_v5.end());
+	 	ssize.push_back(temps_v1.size());
+	 	ssize.push_back(temps_v2.size());
+	 	ssize.push_back(temps_v3.size());
+	 	ssize.push_back(temps_v4.size());
+	 	ssize.push_back(temps_v5.size());
 
 	 	// for(int i = 0; i<temps_v.size(); i++){
 	 	// 	cout<<temps_v.at(i).did<<endl;
@@ -332,80 +319,66 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
   	// 	singlemap5[term] = temps_v5;
 
 	 	singlemap[term] = temps_v;
+	 	ssizemap[term] = ssize;
+	 	cout<<term<<": "<<temps_v.size()<<endl;
+	 	cout<<term<<": "<<ssize.size()<<endl;
 	 	temps_v1.clear();
   		temps_v2.clear();
   		temps_v3.clear();
   		temps_v4.clear();
   		temps_v5.clear();
   		temps_v.clear();
+  		ssize.clear();
 
 	}
-
-	 //  	for(map<string, vector<sinfo>>::iterator it = singlemap1.begin(); it!=singlemap1.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	// for(int i=0; i<it->second.size(); i++){
-		// 	// 	cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-		// 	// }
-		// }
-
-		// for(map<string, vector<sinfo>>::iterator it = singlemap2.begin(); it!=singlemap2.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	// for(int i=0; i<it->second.size(); i++){
-		// 	// 	cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-		// 	// }
-		// }
-
-		// for(map<string, vector<sinfo>>::iterator it = singlemap3.begin(); it!=singlemap3.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	// for(int i=0; i<it->second.size(); i++){
-		// 	// 	cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-		// 	// }
-		// }
-
-		// for(map<string, vector<sinfo>>::iterator it = singlemap4.begin(); it!=singlemap4.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	// for(int i=0; i<it->second.size(); i++){
-		// 	// 	cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-		// 	// }
-		// }
-
-		// for(map<string, vector<sinfo>>::iterator it = singlemap5.begin(); it!=singlemap5.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	// for(int i=0; i<it->second.size(); i++){
-		// 	// 	cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-		// 	// }
-		// }
-
-		// int size = 0;
-		// for(map<string, vector<sinfo>>::iterator it = singlemap1.begin(); it!=singlemap1.end(); ++it){
-		// 	cout<< it->first << ": " <<it->second.size()<<endl;
-		// 	size = size + it->second.size();
-		// }
 
 		short offset = 0;
 		short elem = 0;
 		hashTable *ht;
-		ht = initHash(100, 0); //table size 3079
+		// ht = initHash(100, 0); //table size 3079
+		ht = initHash(3079, 1); //table size 3079
 		vector<int> didresults;
 		vector<float> scoreresults;
-		vector<string> kbitsresults;
+		vector<short> kbitsresults;
 
+		int mapping = 0;
+		for(map<string, int>::iterator it = termmapping.begin(); it!=termmapping.end(); ++it){
+			// it->second = mapping ++;
+			// it->second = pow(2, mapping++);
+			it->second = 2<<mapping++;
+
+		}
+
+		for(map<string, int>::iterator it = termmapping.begin(); it!=termmapping.end(); ++it){
+			cout<<it->first<<": "<<it->second<<endl;
+		}
 
 		p.start(CONSTS::ALLQS);
 
 		/*for the single lists hashing*/
+		for(int k=0; k<5; k++){
+
 		for(map<string, vector<sinfo>>::iterator it = singlemap.begin(); it!=singlemap.end(); ++it){
-			for(int i=0; i<it->second.size(); i++){
+
+			// cout<<k+1<<" single try: "<<it->first<<" "<<ssizemap[it->first].at(k)<<endl;
+			// for(int i=0; i<it->second.size(); i++){
+			   for(int i=0; i<ssizemap[it->first].at(k); i++){
+
 				// cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
 				int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults);
     			if (pos){ //key already existed
-     				 printf("Key %d already exists!\n", GETKEY(ht->table[pos-1], didresults));
+     				 // printf("Key %d already exists!\n", GETKEY(ht->table[pos-1], didresults));
       				 // score[ht->table[pos-1]]++;
+    					// cout<<it->second.at(i).did<<" key already existed at: "<<ht->table[pos-1]<<" pos: "<<pos<<endl;
+    					scoreresults.at(ht->table[pos-1]) = scoreresults.at(ht->table[pos-1]) + it->second.at(i).score;
+    					kbitsresults.at(ht->table[pos-1]) = (kbitsresults.at(ht->table[pos-1])) | (termmapping[it->first]);
 
    					 }else{ //successfully inserted
       					 // array[offset] = list[i];
    					 	// didresults.at[offset] = it->second.at(i).did;
    					 	didresults.push_back(it->second.at(i).did);
+   					 	scoreresults.push_back(it->second.at(i).score);
+   					 	kbitsresults.push_back(~(termmapping[it->first]));
      					 // score[offset]++;
      			 		elem = ++ offset;
    					 	// printf("successfully inserted!\n");
@@ -413,43 +386,53 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 			}
 		}
 
-		// for(int i=0; i<didresults.size(); i++){
-
-		// 	cout<<didresults.at(i)<<endl;
-		// }
-		/*singlelist*/
-
-		offset = didresults.size();
-		elem = offset;
-
+		
+		// offset = didresults.size();
+		// elem = offset;
 		/*for the pair lists hashing*/
+	
 		for(map<string, vector<pinfo>>::iterator it = pairmap.begin(); it!=pairmap.end(); ++it){
-			for(int i=0; i<it->second.size(); i++){
+			// cout<<k+1<<" pair try: "<<it->first<<" "<<psizemap[it->first].at(k)<<endl;
+
+			string dem = "+";
+			// for(int i=0; i<it->second.size(); i++){
+			for(int i=0; i<psizemap[it->first].at(k); i++){
+
 				// cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
 				int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults);
     			if (pos){ //key already existed
-     				 printf("Key %d already exists!\n", GETKEY(ht->table[pos-1], didresults));
+     				 // printf("Key %d already exists!\n", GETKEY(ht->table[pos-1], didresults));
       				 // score[ht->table[pos-1]]++;
 
    					 }else{ //successfully inserted
       					 // array[offset] = list[i];
    					 	// didresults.at[offset] = it->second.at(i).did;
    					 	didresults.push_back(it->second.at(i).did);
+   					 	scoreresults.push_back(it->second.at(i).s1);
+   					 	kbitsresults.push_back(1);
      					 // score[offset]++;
      			 		elem = ++ offset;
    					 	// printf("successfully inserted!\n");
    				 }
 			}
+		}
+			clearHash(ht);
 		}
 		/*pairlist*/
 
 		p.end(CONSTS::ALLQS);
 
 
-		cout<<"final did #: "<<didresults.size()<<endl;
-		
-		for(int i=0; i<didresults.size(); i++){
-			cout<<didresults.at(i)<<endl;
-		}
 
+		cout<<"final did #: "<<didresults.size()<<endl;
+
+		// for(int i=0; i<didresults.size(); i++){
+		// 	cout<<didresults.at(i)<<endl;
+		// 	cout<<scoreresults.at(i)<<endl;
+		// }
+
+		bitset<8> x(4);
+		cout<<x<<endl;
+		bitset<8> y(~4);
+		cout<<y<<endl;
 }

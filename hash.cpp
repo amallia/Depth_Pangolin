@@ -73,6 +73,7 @@ void destroyHash(hashTable *ht)
 int insertHash(hashTable *ht, int key, short elem, int overwrite, vector<int> & a)
 
 {
+  // printf("key to insert: %d ", key);
   // printf("elem to insert: %d \n", elem);
   int atry;
   unsigned int pos;

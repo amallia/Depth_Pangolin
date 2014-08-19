@@ -124,7 +124,7 @@ void QueryProcessing::fillTermsMap_pairs(termsMap& lex){
    	 	  // printf ("%s\n", ent->d_name);
   		  string filename = string(ent->d_name);
   		  if((filename.compare(".")!=0)&&(filename.compare("..")!=0)){
-   	 	  		lex[filename] = 1000; //pair depth
+   	 	  		lex[filename] = 500; //pair depth
    	 	}
   		}
   		cout<<"pairlex size: "<<lex.size()<<endl;
@@ -393,7 +393,7 @@ void QueryProcessing::operator()(CluewebReader* Reader, const char* queryLog, co
 
 	/* perform query processing for each query */
 	// while( qn++ < 49984) {  //for result 500
-	while( qn++ < 1) {
+	while( qn++ < 10) {
 
 		++queriesFIterator;
 		if(queriesFIterator == logManager.end()) {
