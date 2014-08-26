@@ -393,7 +393,7 @@ void QueryProcessing::operator()(CluewebReader* Reader, const char* queryLog, co
 
 	/* perform query processing for each query */
 	// while( qn++ < 49984) {  //for result 500
-	while( qn++ < 10) {
+	while( qn++ < 33) {
 
 		++queriesFIterator;
 		if(queriesFIterator == logManager.end()) {
@@ -401,7 +401,7 @@ void QueryProcessing::operator()(CluewebReader* Reader, const char* queryLog, co
 			break;
 		}
 
-		// if(qn <= 40000)
+		// if(qn != 1)
   //   		continue;
 
 		std::vector<std::string> word_l = (*queriesFIterator);
@@ -412,7 +412,7 @@ void QueryProcessing::operator()(CluewebReader* Reader, const char* queryLog, co
 		}
 
 		/*Control query size*/
-		// if(word_l.size()!=7)
+		// if(word_l.size()!=4)
 		// 	continue;
 
 		// ########################################################################################

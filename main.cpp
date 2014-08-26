@@ -243,13 +243,16 @@ int main(int argc, char * argv[] ){
 	 				if(Rlist.unpadded_list_length<=buffer_size){
 
 	 				const int size = Rlist.unpadded_list_length;
-	 				unsigned int t_a [size];
+	 				unsigned int t_a [size]; //for int did
+	 				float t_f [size]; //for float score
+
 
 	 				for(int j = 0; j < Rlist.unpadded_list_length; j++){
 	 					t_a[j] = t_list.at(j).did;
+	 					t_f[j] = t_list.at(j).score;
 	 				}
 
-	 				// const string path = fd + Rlist.term;
+	 				/*write the dids into binary file*/
 	 				const string path = CONSTS::score_index_binary + Rlist.term;
 	 				FILE *f_b = fopen(path.c_str(),"wb");
 	 				// FILE *f_b = fopen(CONSTS::score_index_binary.c_str(),"wb");
@@ -257,6 +260,16 @@ int main(int argc, char * argv[] ){
 	 				fwrite(t_a, sizeof(unsigned int), size, f_b);
 	 				fflush(f_b);
 	 				fclose(f_b);
+
+
+	 				/*write the score into binary file*/
+	 				const string path_f = CONSTS::score_index_binary_f + Rlist.term;
+	 				FILE *f_b_f = fopen(path_f.c_str(),"wb");
+	 				// FILE *f_b = fopen(CONSTS::score_index_binary.c_str(),"wb");
+	 				// cout<<"writen bytes: "<<fwrite(t_a, sizeof(unsigned int), size, f_b)<<endl;
+	 				fwrite(t_f, sizeof(float), size, f_b_f);
+	 				fflush(f_b_f);
+	 				fclose(f_b_f);
 
 	 				}
 
@@ -267,31 +280,44 @@ int main(int argc, char * argv[] ){
 	 					 const int rem = Rlist.unpadded_list_length % buffer_size;
 	 					 cout<<"block: "<<block<<" rem: "<<rem<<endl;
 
+
+	 					 /*write the dids(int) scores(float) into binary file*/
 						 const string path = CONSTS::score_index_binary + Rlist.term;
 	 					 FILE *f_b = fopen(path.c_str(),"wb");
+
+	 					 const string path_f = CONSTS::score_index_binary_f + Rlist.term;
+	 					 FILE *f_b_f = fopen(path_f.c_str(),"wb");
 
 	 					 for(int k = 0; k < block; k++){
 	 					 	// cout<<"p0"<<endl;
 	 	 					unsigned int t_a [buffer_size];
+	 	 					float t_f [buffer_size];
 	 	 					// cout<<"p1"<<endl;
 	 	 					for(int j = 0; j < buffer_size; j++){
 	 						t_a[j] = t_list.at(j+k*buffer_size).did;
+	 						t_f[j] = t_list.at(j+k*buffer_size).score;
 	 					  }
 	 	 					// cout<<"writen bytes: "<<fwrite(t_a, sizeof(unsigned int), buffer_size, f_b)<<endl;
 	 					  fwrite(t_a, sizeof(unsigned int), buffer_size, f_b);
+	 					  fwrite(t_f, sizeof(float), buffer_size, f_b_f);
 	 					 }	
 
 	 					 if(rem != 0){
 	 					 		// cout<<"p0"<<endl;
 	 							unsigned int t_a [rem];
+	 							float t_f[rem];
 	 							// cout<<"p1"<<endl;
 	 	 						for(int j = 0; j < rem; j++){
 	 							t_a[j] = t_list.at(j+block*buffer_size).did;
+	 							t_f[j] = t_list.at(j+block*buffer_size).score;
 	 	 					}
 	 					 // cout<<"writen bytes: "<<fwrite(t_a, sizeof(unsigned int), rem, f_b)<<endl;
 	 	 				 fwrite(t_a, sizeof(unsigned int), rem, f_b);
-	 				}
+	 	 				 fwrite(t_f, sizeof(unsigned int), rem, f_b_f);
+	 				     }
 	 					 fclose(f_b);
+	 					 fclose(f_b_f);
+	 				     /*finish writing the dids(int) scores(float)*/
 
 	 			  }
 	 				/*---------*/

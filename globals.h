@@ -158,8 +158,9 @@ namespace CONSTS {
 	const std::string trecRoot("/data/qw376/trec_output/"); //main index
 	// const std::string testingQuery("/data/qw376/experiments/pairs_testing_set_sorted_uniq_nodup_nosym");
 	// const std::string testingQuery("/data/qw376/experiments/true_queries_WSDM"); //main 
-	const std::string testingQuery("/data/qw376/experiments/queries_813"); //main query
+	// const std::string testingQuery("/data/qw376/experiments/queries_813"); //main query
 	// const std::string testingQuery("/data/qw376/experiments/test_query"); //main query
+	const std::string testingQuery("/data/qw376/experiments/Query8-22"); //main 
 	const std::string doclenFileName("/data/constantinos/Index/documentLengths"); //doc lengths
 	const std::string basic_table("/data/qw376/experiments/lexicon_baby_712"); //lexicon
 	const std::string score_index_binary("/data/qw376/score_index_binary/");//score sorted binary dir
@@ -167,6 +168,7 @@ namespace CONSTS {
 	const std::string cr_results("/data/qw376/WSDM_Index_Script/500_cr");//cr results
 	const std::string index_depth("/data/qw376/experiments/depth_index_d7");//depth index
 	const std::string index_kl("/data/qw376/experiments/index_kl_0_1000");//known index
+	const std::string Candidates_200("/data/qw376/experiments/Candidates_200");//Candidates index
 	const std::string clueweb_index("/data/constantinos/InvertedIndex");//clueweb whole index
 
 	/*vida*/
