@@ -500,7 +500,7 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 		int lookups = 0;
 
 		ofstream out_stream;
-		out_stream.open(CONSTS::Candidates_200.c_str(), ofstream::app);
+		// out_stream.open(CONSTS::Candidates_200.c_str(), ofstream::app);
 
 		
 		for(int i=0; i<fresults.size(); i++){
@@ -516,9 +516,9 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
     		// bitset<8> x(fresults.at(i).kbits);
 			// cout<<fresults.at(i).did<<", "<<fresults.at(i).score<<", "<<x<<", "<<t_l - count<<endl;
-			out_stream<<fresults.at(i).did<<" ";
+			// out_stream<<fresults.at(i).did<<" ";
 		}
-		out_stream<<endl;
+		// out_stream<<endl;
 		out_stream.close();
 
 		cout<<"Total lookups needed: "<<lookups<<endl;
