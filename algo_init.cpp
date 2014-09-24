@@ -9,7 +9,6 @@
 #include "globals.h"
 #include "profiling.h"
 #include "utils.h"
-#include "hash.h"
 #include <cstring>
 #include <string>
 #include <fstream>
@@ -17,122 +16,107 @@
 #include <string>
 #include <bitset>
 
-using namespace std;
+ using namespace std;
 
-typedef pair<string, int> PAIR;  
+ bool myfunc (const sinfo& a, const sinfo& b){
+ 	return (a.score > b.score);
+ }
 
-struct pinfo{
-	unsigned int did;
-	// float s;
-	float s1;
-	float s2;
-};
+ bool sortcdt (const fullinfo& a, const fullinfo& b){
+ 	return (a.score > b.score);
+ }	
 
-struct sinfo{
-	unsigned int did;
-	// unsigned int freq;
-	float score;
-};
+ bool cmp_by_value(const PAIR& lhs, const PAIR& rhs) {  
+ 	return lhs.second < rhs.second;  
+ }  
 
-struct scores{
-	float s1;
-	float s2;
-	int f1;
-	int f2;
-};
+ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrArray& lps, const int topK, QpResult* res, profilerC& p) {
 
-struct fullinfo{
-	int did;
-	float score;
-	short kbits;
-};
+	//number of pairs we have
+    number_of_pairs = pls.lengths.size();
+	//number of single terms we have
+    number_of_singles = lps.size();
+	//total structures we have
+    total_number_of_structures = pls.lengths.size() + lps.size();
 
-bool myfunc (const sinfo& a, const sinfo& b){
-	return (a.score > b.score);
+	// cout<<"origin singleterms: "<<lps.size()<<endl;
+	// cout<<"origin pairs: "<<pls.lengths.size()<<endl;
+
+ 	slice_docidspace();
+
+ 	for(int i=0; i<=slices; i++){
+ 		cout<<"slice # "<<i<<": "<<slice_offsets[i]<<endl;
+ 	}
+
+
+ 	load_singlelists_tomap(Reader, lps);
+
+	decide_hashtablesize();
+
+	decide_termbits();
+
+	load_pairlists_tomap(pls);
+
+	cout<<"singleterms after purge: "<<singleinfos.size()<<endl;
+	cout<<"pairs after purge: "<<pairinfos.size()<<endl;
+
+	p.start(CONSTS::ALLQS);
+
+	taat_merging();
+
+	p.end(CONSTS::ALLQS);
+
+	writeout_results();
+
 }
 
-bool sortcdt (const fullinfo& a, const fullinfo& b){
-	return (a.score > b.score);
-}	
 
-bool cmp_by_value(const PAIR& lhs, const PAIR& rhs) {  
-  return lhs.second < rhs.second;  
-}  
+algo_init::algo_init(unsigned int* pgs){
 
-void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrArray& lps, const int topK, QpResult* res, profilerC& p) {
+	pages = pgs;
 
+	/*To determine the hashtable size*/
+	totaldids = 0;
 
-	const int p_l = pls.lengths.size();
-	const int t_l = lps.size();
-	const int a_l = pls.lengths.size() + lps.size();
-	cout<<"origin singleterms: "<<lps.size()<<endl;
-	cout<<"origin pairs: "<<pls.lengths.size()<<endl;
+	//For a 4 term query, the filter is 00001111 
+ 	short filter = (1<<number_of_singles) - 1;
+	// bitset<8> y(filter);
+	// cout<<y<<endl;
 
-	string queryline;
+	/*we estimate the final number of results won't be larger than 15000*/
+	fresults.reserve(15000);
 
-	short filter = (1<<t_l) - 1;
-	bitset<8> y(filter);
-	cout<<y<<endl;
+	/*to devide the pairs*/
+	dem = "+";
 
-	/*total # of docids, used for hashtable size*/
-	size_t totaldids = 0;
+	elem = 0;
 
-	/*used to parse term1+term2 in pair*/
-	string dem = "+";
-	string term1, term2;
-	size_t position = 0;
+}
 
+void algo_init::slice_docidspace(){
 
-	/*each term has a # with a binary bits representation, 0 indicates existing, sorted by impact, the lower the bit is, the higher the impact*/
-	map<string, int> termmapping;
+	slice_offsets[0] = 0;
+ 	slice_offsets[slices] = CONSTS::MAXD;
+ 	int range = CONSTS::MAXD/slices;
 
-	/*each term with the sum of its top1 scores, will be used to assign the binary bits*/
-	vector<PAIR> tllv;
+ 	for(int i=1; i<slices; i++){
+ 		slice_offsets[i] = slice_offsets[i-1] + range;
+ 	}
 
-	/*pairmap has the pinfo vector stores all the dids in slices seq, while in each slice ordered by inmpact*/
-	/*psize map has #=slice elem, each elem is the # of dids within each slice*/
-	map<string, vector<pinfo>> pairmap;
-	map<string, vector<size_t>> psizemap;
+}
 
-	/*singlemap has the pinfo vector stores all the dids in slices seq, while in each slice ordered by inmpact*/
-	/*ssize map has #=slice elem, each elem is the # of dids within each slice*/
-	map<string, vector<sinfo>> singlemap;
-	map<string, vector<size_t>> ssizemap;
-
-	/*# of slices, build the boundries for each slice*/
-	const int slices = 6;
-	int bs[slices+1];
-	bs[0] = 0;
-	bs[slices] = CONSTS::MAXD;
-	int jump = CONSTS::MAXD/slices;
-
-	for(int i=1; i<slices; i++){
-		bs[i] = bs[i-1] + jump;
-	}
-
-	for(int i=0; i<=slices; i++){
-		cout<<"slice # "<<i<<": "<<bs[i]<<endl;
-	}
-
-	vector<pinfo> tempp_vu;
-	vector<pinfo> tempp_vo;
-	vector<pinfo> tempp_v;
-	vector<size_t> psize;
+void algo_init::load_singlelists_tomap(CluewebReader* Reader, lptrArray& lps){
 
 	vector<sinfo> temps_v;
-	vector<size_t> ssize;
+ 	vector<size_t> ssize;
 
+ 	for (int i=0; i<lps.size(); ++i){
 
-	/*load the singlelist into map*/
-	for (int i=0; i<lps.size(); ++i){
+ 		const string term = lps[i]->term;
+ 		const int length = lps[i]->unpadded_list_length;
 
-
-
-		const string term = lps[i]->term;
-		const int length = lps[i]->unpadded_list_length;
-
-		// termmapping[term] = 0; //for termmapping, just insert the term in the map, the value 0 doesn't matter
-		tllv.push_back(make_pair(term, length)); //for termmapping, pair value is the listlength
+		// termbits[term] = 0; //for termbits, just insert the term in the map, the value 0 doesn't matter
+		term_orders.push_back(make_pair(term, length)); //for termbits, pair value is the listlength
 
 
 		const int l_sqrt = sqrt(lps[i]->unpadded_list_length);
@@ -145,24 +129,24 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
 		int term_id = Reader->term_map[term];
 		// cout<<term<<" "<<term_id<<endl;
-	 	RawIndexList Rlist = Reader->load_raw_list(term,term_id);
+		RawIndexList Rlist = Reader->load_raw_list(term,term_id);
 
-	 	vector<sinfo> t_list;
+		vector<sinfo> t_list;
 
-	 	for(int h = 0; h < length; h++){
-	 		sinfo t_p;
-	 		t_p.did  = Rlist.doc_ids.at(h);
+		for(int h = 0; h < length; h++){
+			sinfo t_p;
+			t_p.did  = Rlist.doc_ids.at(h);
 	 		// t_p.freq = Rlist.freq_s.at(h);
-	 		t_p.score = Rlist.scores.at(h);
-	 		t_list.push_back(t_p);
-	 	}
+			t_p.score = Rlist.scores.at(h);
+			t_list.push_back(t_p);
+		}
 
-	 	sort(t_list.begin(), t_list.end(), myfunc);
+		sort(t_list.begin(), t_list.end(), myfunc);
 
-	 	size_t cut = 1000;
-	 	if(length > cut)
-	 	t_list.resize(cut);// resize according to Configuration file
-	 	totaldids += cut;
+		size_t cut = 1000;
+		if(length > cut)
+	 		t_list.resize(cut);// resize according to Configuration file
+		totaldids += cut;
 
 	 	// cout<<t_list.size()<<endl;
 
@@ -170,357 +154,307 @@ void algo_init::operator() (CluewebReader* Reader, int qn, pairlists& pls, lptrA
 
 		for(int h=0; h<slices; h++){
 			int ct = 0;
-	 	  for(int j = 0; j < t_list.size(); j++){
-
-
-	 		if(t_list.at(j).did > bs[h] && t_list.at(j).did <= bs[h + 1]){
-	 			temps_v.push_back(t_list.at(j));
-	 			ct ++;
-	 		}
-
-	 	  }
+			for(int j = 0; j < t_list.size(); j++){
+				if(t_list.at(j).did > slice_offsets[h] && t_list.at(j).did <= slice_offsets[h + 1]){
+					temps_v.push_back(t_list.at(j));
+					ct ++;
+				}
+			}
 	 	  	// cout<<"ct: "<<ct<<endl;
-	 	    ssize.push_back(ct+ssize.back());
+			ssize.push_back(ct+ssize.back());
 		}
 
 
 
-	 	singlemap[term] = temps_v;
-	 	ssizemap[term] = ssize;
-	 	cout<<term<<": "<<temps_v.size()<<endl;
-	 	cout<<term<<": "<<ssize.size() - 1<<endl;
+		singleinfos[term] = temps_v;
+		singleslicesizes[term] = ssize;
+		cout<<term<<": "<<temps_v.size()<<endl;
+		cout<<term<<": "<<ssize.size() - 1<<endl;
 
-  		temps_v.clear();
-  		ssize.clear();
+		temps_v.clear();
+		ssize.clear();
 
 	}
 
-		unsigned short offset = 0;
-		unsigned short elem = 0;
-		hashTable *ht;
-		if( 5*totaldids/slices < 8191)
-		ht = initHash(totaldids/slices, 0); 
-		else
-		ht = initHash(8191, 1); //table size 8191
-		// vector<int> didresults;
-		// vector<float> scoreresults;
-		// vector<short> kbitsresults;
-		// didresults.reserve(15000);
-		// scoreresults.reserve(15000);
-		// kbitsresults.reserve(15000);
-		vector<fullinfo> fresults;
-		fresults.reserve(15000);
+}
 
+void algo_init::load_pairlists_tomap(pairlists& pls){
 
-		/*term mapping according to listlen*/
-		int mapping = 0;
+	/*to parse term1+term2 in a pair*/
+	position = 0;
 
-		sort(tllv.begin(), tllv.end(), cmp_by_value);
+	vector<pinfo> tempp_vu;
+ 	vector<pinfo> tempp_vo;
+ 	vector<pinfo> tempp_v;
+ 	vector<size_t> psize;
 
-		for(int i=0; i<tllv.size(); i++){
-			cout<<tllv.at(i).first<<": "<<tllv.at(i).second<<endl;
-			termmapping[tllv.at(i).first] = ~ (1<<mapping++);
-		}
-
-		// for(map<string, int>::iterator it = termmapping.begin(); it!=termmapping.end(); ++it){
-		// 	it->second = ~ (1<<mapping++) ;
-		// }
-
-		for(map<string, int>::iterator it = termmapping.begin(); it!=termmapping.end(); ++it){
-
-			bitset<8> x(it->second);
-			cout<<it->first<<": "<<x<<endl;
-
-		}
-		/*term mapping according to listlen*/
-
-
-	/*---load the pair lists into map----*/
-  	string did_s;
-  	int did;
-  	string sc1_s;
-  	float sc1;
-  	string sc2_s;
-  	float sc2;
-  	int count = 0;
+ 	string queryline;
+	string did_s;
+	int did;
+	string sc1_s;
+	float sc1;
+	string sc2_s;
+	float sc2;
+	int count = 0;
   	// string ts_s;
   	// float ts;
 
   	if(pls.lengths.size()>0){/*if pair list size is not 0*/
 
-  	for(int k = 0; k < pls.lengths.size(); k++){
+		for(int k = 0; k < pls.lengths.size(); k++){
 
-  	position = pls.pairnames.at(k).find(dem);
-	term1 = pls.pairnames.at(k).substr(0, position);
-	term2 = pls.pairnames.at(k).substr(position+1,pls.pairnames.at(k).size());
-	// bitset<8> x(termmapping[term1]);
-	// bitset<8> y(termmapping[term2]);
-	// bitset<8> z(((~termmapping[term1])>>3) | ((~termmapping[term2])>>3));
-	// cout<<"in loading pairs stage: "<<term1<<": "<<x<<", "<<term2<<": "<<y<<": "<<z<<endl;
+			position = pls.pairnames.at(k).find(dem);
+			term1 = pls.pairnames.at(k).substr(0, position);
+			term2 = pls.pairnames.at(k).substr(position+1,pls.pairnames.at(k).size());
+			// bitset<8> x(termbits[term1]);
+			// bitset<8> y(termbits[term2]);
+			// bitset<8> z(((~termbits[term1])>>3) | ((~termbits[term2])>>3));
+			// cout<<"in loading pairs stage: "<<term1<<": "<<x<<", "<<term2<<": "<<y<<": "<<z<<endl;
 
-	if( ( ((~termmapping[term1])>>3) | ((~termmapping[term2])>>3) ) > 0)
-		continue;
+			if( ( ((~termbits[term1])>>3) | ((~termbits[term2])>>3) ) > 0)
+				continue;
 
-  	ifstream pair_stream;
-  	string pair_dir = CONSTS::pair_index + pls.pairnames.at(k);
-  	// string pair_dir = "/data/qw376/pair_index/" + pls.pairnames.at(k);
-  	pair_stream.open(pair_dir.c_str());
+			ifstream pair_stream;
+			string pair_dir = CONSTS::pair_index + pls.pairnames.at(k);
+	  		// string pair_dir = "/data/qw376/pair_index/" + pls.pairnames.at(k);
+			pair_stream.open(pair_dir.c_str());
 
-  	count = 0;
+			count = 0;
 
-  	// cout<<pls.pairnames.at(k)<<endl;
+	  	// cout<<pls.pairnames.at(k)<<endl;
 
-  	while(getline(pair_stream, queryline)){
+			while(getline(pair_stream, queryline)){
 
-  		pinfo temp;
+				pinfo temp;
 
-  		// cout<<queryline<<endl;
-  		string::iterator itr = queryline.begin();
-		string::iterator start = itr;
+	  		// cout<<queryline<<endl;
+				string::iterator itr = queryline.begin();
+				string::iterator start = itr;
 
-   		while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
 
-		did_s = string(start, itr);
-		did = atoi(did_s.c_str());
+				did_s = string(start, itr);
+				did = atoi(did_s.c_str());
 
-		//take the total score
-		start = itr+1;
-  	  	itr++;
-    	while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
-		// ts_s = string(start, itr);
-		// ts = atof(ts_s.c_str());
+			//take the total score
+				start = itr+1;
+				itr++;
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
+			// ts_s = string(start, itr);
+			// ts = atof(ts_s.c_str());
 
-		//ignore the first freq
-		start = itr+1;
-  	  	itr++;
-    	while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
+			//ignore the first freq
+				start = itr+1;
+				itr++;
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
 
-		//take the first score
-		start = itr+1;
-  	  	itr++;
-    	while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
+			//take the first score
+				start = itr+1;
+				itr++;
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
 
-		sc1_s = string(start, itr);
-		sc1 = atof(sc1_s.c_str());
+				sc1_s = string(start, itr);
+				sc1 = atof(sc1_s.c_str());
 
-		//ignore the second freq
-		start = itr+1;
-  	  	itr++;
-    	while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
+			//ignore the second freq
+				start = itr+1;
+				itr++;
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
 
-		//take the second score
-		start = itr+1;
-  	  	itr++;
-    	while(itr != queryline.end() && !isspace(*itr)){
-			++itr;
-		}
+			//take the second score
+				start = itr+1;
+				itr++;
+				while(itr != queryline.end() && !isspace(*itr)){
+					++itr;
+				}
 
-		sc2_s = string(start, itr);
-		sc2 = atof(sc2_s.c_str());
-
-
-		temp.did = did;
-		// temp.s = ts;
-		temp.s1 = sc1;
-		temp.s2 = sc2;
-
-		tempp_vo.push_back(temp);
-
-  		count ++;		
-		// t_map[didl] = count;
-  		if (count == pls.lengths.at(k)){
-  			totaldids += count;
-  			break;
-  		}
-
-  	}
+				sc2_s = string(start, itr);
+				sc2 = atof(sc2_s.c_str());
 
 
-  		psize.push_back(0); //the first should be 0;
+				temp.did = did;
+			// temp.s = ts;
+				temp.s1 = sc1;
+				temp.s2 = sc2;
 
-  		// cout<<pls.pairnames.at(k)<<": "<<tempp_vo.size()<<endl;
+				tempp_vo.push_back(temp);
 
-  		for(int j=0; j<slices; j++){
-  			int ct = 0;
-	 		for(int i=0; i<tempp_vo.size(); i++){	
-	 		  if(tempp_vo.at(i).did > bs[j] && tempp_vo.at(i).did <= bs[j + 1]){
-	 			tempp_v.push_back(tempp_vo.at(i));
-	 			ct ++;
-	 		  }
-	 	  }
-	 	  	// cout<<"ct: "<<ct<<endl;
-	 	    psize.push_back(ct+psize.back());
-	 	}
+				count ++;		
+			// t_map[didl] = count;
+				if (count == pls.lengths.at(k)){
+					totaldids += count;
+					break;
+				}
+
+			}
+
+		  	psize.push_back(0); //the first should be 0;
+
+		  		// cout<<pls.pairnames.at(k)<<": "<<tempp_vo.size()<<endl;
+
+		  	for(int j=0; j<slices; j++){
+		  		int ct = 0;
+		  		for(int i=0; i<tempp_vo.size(); i++){	
+		  			if(tempp_vo.at(i).did > slice_offsets[j] && tempp_vo.at(i).did <= slice_offsets[j + 1]){
+		  				tempp_v.push_back(tempp_vo.at(i));
+		  				ct ++;
+		  			}
+		  		}
+			 	  	// cout<<"ct: "<<ct<<endl;
+		  		psize.push_back(ct+psize.back());
+		  	}
 
 
-	 	pairmap[pls.pairnames.at(k)] = tempp_v;
-	 	psizemap[pls.pairnames.at(k)] = psize;
-	 	cout<<pls.pairnames.at(k)<<": "<<tempp_v.size()<<endl;
-	 	cout<<pls.pairnames.at(k)<<": "<<psize.size() - 1<<endl;
+		  	pairinfos[pls.pairnames.at(k)] = tempp_v;
+		  	pairslicesizes[pls.pairnames.at(k)] = psize;
+		  	cout<<pls.pairnames.at(k)<<": "<<tempp_v.size()<<endl;
+		  	cout<<pls.pairnames.at(k)<<": "<<psize.size() - 1<<endl;
 
-	 	tempp_vo.clear();
-  		tempp_v.clear();
-  		psize.clear();
+		  	tempp_vo.clear();
+		  	tempp_v.clear();
+		  	psize.clear();
 
-  	  	pair_stream.close();
+		  	pair_stream.close();
+	  }
+	  position = 0;//later will use position again to parse the pairs
+	}//if pair list size is not 0
+}
+
+void algo_init::decide_hashtablesize(){
+	if( 5*totaldids/slices < 8191)
+		ht = initHash(totaldids/slices, 0); 
+	else
+		ht = initHash(8191, 1); //table size 8191
+}
+
+
+void algo_init::decide_termbits(){
+
+	int orders = 0;
+	sort(term_orders.begin(), term_orders.end(), cmp_by_value);
+
+	for(int i=0; i<term_orders.size(); i++){
+		cout<<term_orders.at(i).first<<": "<<term_orders.at(i).second<<endl;
+		termbits[term_orders.at(i).first] = ~ (1<<orders++);
 	}
 
-	}//if pair list size is not 0
-	/*-----------------------*/
+	for(map<string, int>::iterator it = termbits.begin(); it!=termbits.end(); ++it){
+		bitset<8> x(it->second);
+		cout<<it->first<<": "<<x<<endl;
 
-		cout<<"singleterms after purge: "<<singlemap.size()<<endl;
-	    cout<<"pairs after purge: "<<pairmap.size()<<endl;
+	}
+}
 
-		int hit = 0;
-
-		p.start(CONSTS::ALLQS);
-
+void algo_init::taat_merging(){
 
 		for(int k=0; k<slices; k++){
 
-		/*for the pair lists hashing*/
-		/*the reason put pairs before singles is that pairs is loaded later than singles in loading process, kind of cache warm-up*/
-	
-		for(map<string, vector<pinfo>>::iterator it = pairmap.begin(); it!=pairmap.end(); ++it){
-			// cout<<k+1<<" pair try: "<<it->first<<" "<<psizemap[it->first].at(k+1)-psizemap[it->first].at(k)<<endl;
-			// cout<<psizemap[it->first].at(k+1)<<" - "<<psizemap[it->first].at(k)<<endl;
-			position = it->first.find(dem);
-			term1 = it->first.substr(0, position);
-			term2 = it->first.substr(position+1,it->first.size());
-			// cout<<term1<<" "<<term2<<endl; 
-			// for(int i=0; i<it->second.size(); i++){
-			for(int i=psizemap[it->first].at(k); i<psizemap[it->first].at(k+1); i++){
+			/*for the pair lists hashing*/
+			/*the reason put pairs before singles is that pairs is loaded later than singles in loading process, kind of cache warm-up*/
+			for(map<string, vector<pinfo>>::iterator it = pairinfos.begin(); it!=pairinfos.end(); ++it){
+				position = it->first.find(dem);
+				term1 = it->first.substr(0, position);
+				term2 = it->first.substr(position+1,it->first.size());
+				for(int i=pairslicesizes[it->first].at(k); i<pairslicesizes[it->first].at(k+1); i++){
 
-				// cout<<it->second.at(i).did<<": "<<it->second.at(i).s1<<" "<<it->second.at(i).s2<<endl;
-				// int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults);
-				// int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults, hit);
-				int pos = insertHash(ht, it->second.at(i).did, elem, 0, fresults);
-    			if (pos){ //key already existed
-     				   // printf("Key %d already exists!\n", GETKEY(ht->table[pos-1]-1, didresults));
+					int pos = insertHash(ht, it->second.at(i).did, elem, 0, fresults);
+	    			if (pos){ //key already existed
 
-    				   // scoreresults.at(ht->table[pos-1]-1) = scoreresults.at(ht->table[pos-1]-1) + it->second.at(i).s1 * ( kbitsresults.at(ht->table[pos-1]-1) & (termmapping[term1]) != filter) + it->second.at(i).s2 * ( kbitsresults.at(ht->table[pos-1]-1) & (termmapping[term2]) != filter);
-    				   // kbitsresults.at(ht->table[pos-1]-1) = (kbitsresults.at(ht->table[pos-1]-1)) & (termmapping[term1]) & (termmapping[term2]);
+	    				fresults.at(ht->table[pos-1]-1).score = fresults.at(ht->table[pos-1]-1).score + it->second.at(i).s1 * ( fresults.at(ht->table[pos-1]-1).kbits & (termbits[term1]) != filter) + it->second.at(i).s2 * ( fresults.at(ht->table[pos-1]-1).kbits & (termbits[term2]) != filter);
+	    				fresults.at(ht->table[pos-1]-1).kbits = (fresults.at(ht->table[pos-1]-1).kbits) & (termbits[term1]) & (termbits[term2]);
 
-    					fresults.at(ht->table[pos-1]-1).score = fresults.at(ht->table[pos-1]-1).score + it->second.at(i).s1 * ( fresults.at(ht->table[pos-1]-1).kbits & (termmapping[term1]) != filter) + it->second.at(i).s2 * ( fresults.at(ht->table[pos-1]-1).kbits & (termmapping[term2]) != filter);
-    					fresults.at(ht->table[pos-1]-1).kbits = (fresults.at(ht->table[pos-1]-1).kbits) & (termmapping[term1]) & (termmapping[term2]);
+	   				}else{ //successfully inserted
 
-   					 }else{ //successfully inserted
+					 	fullinfo ftemp;
+					 	ftemp.did = it->second.at(i).did;
+					 	ftemp.score = it->second.at(i).s1 + it->second.at(i).s2;
+					 	ftemp.kbits = (termbits[term1]) & (termbits[term2]);
+					 	fresults.push_back(ftemp);
 
-   					 	// didresults.push_back(it->second.at(i).did);
-   					 	// scoreresults.push_back(it->second.at(i).s1 + it->second.at(i).s2);
-   					 	// kbitsresults.push_back( (termmapping[term1]) & (termmapping[term2]) );
+					 	elem++;
+	   				}
+	   			}
+			}/*pairs finished*/
+
+			/*for the single lists hashing*/
+			for(map<string, vector<sinfo>>::iterator it = singleinfos.begin(); it!=singleinfos.end(); ++it){
+				for(int i=singleslicesizes[it->first].at(k); i<singleslicesizes[it->first].at(k+1); i++){
+
+					int pos = insertHash(ht, it->second.at(i).did, elem, 0, fresults);
+	    			if (pos){ //key already existed
+
+	    				fresults.at(ht->table[pos-1]-1).score = fresults.at(ht->table[pos-1]-1).score + it->second.at(i).score;
+	    				fresults.at(ht->table[pos-1]-1).kbits = fresults.at(ht->table[pos-1]-1).kbits & (termbits[it->first]);
+
+					}else{ //successfully inserted
+
+					 	fullinfo ftemp;
+					 	ftemp.did = it->second.at(i).did;
+					 	ftemp.score = it->second.at(i).score;
+					 	ftemp.kbits = termbits[it->first];
+					 	fresults.push_back(ftemp);
+
+					 	elem++;
+					}
+				}
+			}/*singles finished*/
+
+	   		clearHash(ht);
+   	}
+
+	sort(fresults.begin(), fresults.end(), sortcdt);
+	fresults.resize(200);
+}
+
+void algo_init::writeout_results(){
+
+	// cout<<"final did #: "<<didresults.size()<<endl;
+	cout<<"final did #: "<<fresults.size()<<endl;
+	cout<<"final did #: "<<elem<<endl;
+	// cout<<"attempts: "<<hit<<endl;
+	// cout<<"rate: "<<(float)hit/(float)offset<<endl;
+	// cout<<"final did #: "<<fresults.size()<<endl;
+
+	// for(int i=0; i<didresults.size(); i++){
+	// 	bitset<8> x(kbitsresults.at(i));
+	// 	cout<<didresults.at(i)<<", "<<scoreresults.at(i)<<", "<<x<<endl;
+	// }
+
+	int count = 0;
+	int lookups = 0;
+	// int hit = 0;
+
+	ofstream out_stream;
+	// out_stream.open(CONSTS::Candidates_200.c_str(), ofstream::app);
 
 
-   					 	fullinfo ftemp;
-   					 	ftemp.did = it->second.at(i).did;
-   					 	ftemp.score = it->second.at(i).s1 + it->second.at(i).s2;
-   					 	ftemp.kbits = (termmapping[term1]) & (termmapping[term2]);
-   					 	fresults.push_back(ftemp);
+	for(int i=0; i<fresults.size(); i++){
 
-
-     			 		elem = ++ offset;
-   					 	// printf("successfully inserted!\n");
-   				 }
-			}
-		}/*pairs finished*/
-
-		/*for the single lists hashing*/
-		for(map<string, vector<sinfo>>::iterator it = singlemap.begin(); it!=singlemap.end(); ++it){
-
-			// cout<<k+1<<" single try: "<<it->first<<" "<<ssizemap[it->first].at(k+1)-ssizemap[it->first].at(k)<<endl;
-			// cout<<ssizemap[it->first].at(k+1)<<" - "<<ssizemap[it->first].at(k)<<endl;
-			// for(int i=0; i<it->second.size(); i++){
-			   for(int i=ssizemap[it->first].at(k); i<ssizemap[it->first].at(k+1); i++){
-
-				// cout<<it->second.at(i).did<<": "<<it->second.at(i).score<<endl;
-				// int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults);
-				// int pos = insertHash(ht, it->second.at(i).did, elem, 0, didresults, hit);
-				int pos = insertHash(ht, it->second.at(i).did, elem, 0, fresults);
-    			if (pos){ //key already existed
-     				    // printf("Key %d already exists!\n", GETKEY(ht->table[pos-1]-1, didresults));
-    					// cout<<it->second.at(i).did<<" key already existed at: "<<ht->table[pos-1]<<" pos: "<<pos<<endl;
-
-    					// scoreresults.at(ht->table[pos-1]-1) = scoreresults.at(ht->table[pos-1]-1) + it->second.at(i).score;
-    					// kbitsresults.at(ht->table[pos-1]-1) = (kbitsresults.at(ht->table[pos-1]-1)) & (termmapping[it->first]);
-
-    					fresults.at(ht->table[pos-1]-1).score = fresults.at(ht->table[pos-1]-1).score + it->second.at(i).score;
-    					fresults.at(ht->table[pos-1]-1).kbits = fresults.at(ht->table[pos-1]-1).kbits & (termmapping[it->first]);
-
-   					 }else{ //successfully inserted
-
-   					 	// didresults.push_back(it->second.at(i).did);
-   					 	// scoreresults.push_back(it->second.at(i).score);
-   					 	// kbitsresults.push_back(termmapping[it->first]);
-
-   					 	fullinfo ftemp;
-   					 	ftemp.did = it->second.at(i).did;
-   					 	ftemp.score = it->second.at(i).score;
-   					 	ftemp.kbits = termmapping[it->first];
-   					 	fresults.push_back(ftemp);
-
-     			 		elem = ++ offset;
-   					 	// printf("successfully inserted!\n");
-   				 }
-			}
-		}/*singles finished*/
-
-			clearHash(ht);
+		int n = ~(fresults.at(i).kbits);
+		count = 0;
+		while (n>0) { 
+			count = count + (n&1);
+			n=n>>1; //Right shift by 1 
 		}
-		/*pairlist*/
-
-		sort(fresults.begin(), fresults.end(), sortcdt);
-		fresults.resize(200);
-
-		p.end(CONSTS::ALLQS);
-
-
-
-		// cout<<"final did #: "<<didresults.size()<<endl;
-		cout<<"final did #: "<<fresults.size()<<endl;
-		cout<<"final did #: "<<offset<<endl;
-		// cout<<"attempts: "<<hit<<endl;
-		// cout<<"rate: "<<(float)hit/(float)offset<<endl;
-		// cout<<"final did #: "<<fresults.size()<<endl;
-
-		// for(int i=0; i<didresults.size(); i++){
-		// 	bitset<8> x(kbitsresults.at(i));
-		// 	cout<<didresults.at(i)<<", "<<scoreresults.at(i)<<", "<<x<<endl;
-		// }
-
-		int lookups = 0;
-
-		ofstream out_stream;
-		// out_stream.open(CONSTS::Candidates_200.c_str(), ofstream::app);
-
-		
-		for(int i=0; i<fresults.size(); i++){
-
-			int n = ~(fresults.at(i).kbits);
-			count = 0;
-			while (n>0) { 
-				count = count + (n&1);
-				n=n>>1; //Right shift by 1 
-			}
-
-    		lookups += t_l - count; 
-
+		lookups += number_of_singles - count; 
     		// bitset<8> x(fresults.at(i).kbits);
-			// cout<<fresults.at(i).did<<", "<<fresults.at(i).score<<", "<<x<<", "<<t_l - count<<endl;
+			// cout<<fresults.at(i).did<<", "<<fresults.at(i).score<<", "<<x<<", "<<number_of_singles - count<<endl;
 			// out_stream<<fresults.at(i).did<<" ";
-		}
-		// out_stream<<endl;
-		out_stream.close();
+	}
+	// out_stream<<endl;
+	// out_stream.close();
 
-		cout<<"Total lookups needed: "<<lookups<<endl;
+	cout<<"Total lookups needed: "<<lookups<<endl;
+
 
 }
